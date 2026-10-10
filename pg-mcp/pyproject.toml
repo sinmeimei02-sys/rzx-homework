@@ -22,9 +22,14 @@ dev = [
     "ruff>=0.14.0",
     "mypy>=1.19.0",
 ]
+web = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.34.0",
+]
 
 [project.scripts]
 pg-mcp = "pg_mcp.__main__:main"
+pg-mcp-web = "pg_mcp.web:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -49,7 +54,10 @@ select = [
     "S",     # security (bandit)
     "ASYNC", # async best practices
 ]
-ignore = ["RUF022"] # Allow organized __all__ with comments
+ignore = [
+    "RUF022", # Allow organized __all__ with comments
+    "RUF001", # Chinese UI strings legitimately use full-width punctuation
+]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = [

@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>pg-mcp 自然语言查询</title>
+<style>
+  :root {
+    --bg: #f5f7fa;
+    --card: #ffffff;
+    --border: #e4e8ee;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --accent: #2563eb;
+    --accent-dark: #1d4ed8;
+    --ok: #059669;
+    --warn: #d97706;
+    --err: #dc2626;
+    --code-bg: #0f172a;
+    --code-text: #e2e8f0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .container { max-width: 920px; margin: 0 auto; padding: 24px 16px 64px; }
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  h1 { font-size: 22px; margin: 0; }
+  h1 .logo { color: var(--accent); }
+  .pill {
+    font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--card); color: var(--muted);
+  }
+  .pill.ok { color: var(--ok); border-color: var(--ok); }
+  .pill.bad { color: var(--err); border-color: var(--err); }
+  .banner {
+    display: none; margin-bottom: 16px; padding: 12px 14px; border-radius: 10px;
+    background: #fffbeb; border: 1px solid #fcd34d; color: #92400e; font-size: 14px; line-height: 1.6;
+  }
+  .banner.error { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+  .banner code { background: rgba(0,0,0,.06); padding: 1px 6px; border-radius: 4px; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px; margin-bottom: 16px;
+  }
+  .query-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  select, textarea, button { font: inherit; }
+  select {
+    padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: #fff;
+    min-width: 140px;
+  }
+  .question-wrap { flex: 1 1 320px; }
+  textarea {
+    width: 100%; min-height: 68px; resize: vertical; padding: 10px 12px;
+    border: 1px solid var(--border); border-radius: 8px; outline: none;
+  }
+  textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
+  .actions { display: flex; gap: 8px; margin-top: 10px; align-items: center; flex-wrap: wrap; }
+  button.primary {
+    background: var(--accent); color: #fff; border: none; border-radius: 8px;
+    padding: 9px 22px; cursor: pointer; font-weight: 600;
+  }
+  button.primary:hover { background: var(--accent-dark); }
+  button.primary:disabled { opacity: .55; cursor: not-allowed; }
+  button.secondary {
+    background: #fff; color: var(--accent); border: 1px solid var(--accent);
+    border-radius: 8px; padding: 9px 18px; cursor: pointer;
+  }
+  button.secondary:hover { background: #eff6ff; }
+  button.secondary:disabled { opacity: .55; cursor: not-allowed; }
+  .examples { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip {
+    font-size: 12px; color: var(--muted); background: var(--bg); border: 1px solid var(--border);
+    border-radius: 999px; padding: 4px 12px; cursor: pointer;
+  }
+  .chip:hover { color: var(--accent); border-color: var(--accent); }
+  .spinner {
+    display: none; width: 18px; height: 18px; border: 2px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #result:empty { display: none; }
+  .meta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .tag {
+    font-size: 12px; padding: 4px 10px; border-radius: 999px;
+    background: var(--bg); border: 1px solid var(--border); color: var(--muted);
+  }
+  .tag b { color: var(--text); font-weight: 600; }
+  .sql-label { font-size: 12px; color: var(--muted); margin-bottom: 6px; display:flex; justify-content: space-between; align-items:center;}
+  .copy-btn { font-size: 12px; color: var(--accent); background: none; border: none; cursor: pointer; }
+  pre.sql {
+    background: var(--code-bg); color: var(--code-text); padding: 12px 14px;
+    border-radius: 8px; overflow-x: auto; font-size: 13px; line-height: 1.6;
+    font-family: Consolas, "Courier New", monospace; white-space: pre-wrap; word-break: break-word;
+  }
+  .table-wrap { overflow-x: auto; margin-top: 12px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { border: 1px solid var(--border); padding: 7px 10px; text-align: left; }
+  th { background: var(--bg); color: var(--muted); font-weight: 600; white-space: nowrap; }
+  tr:nth-child(even) td { background: #fafbfc; }
+  .error-box {
+    background: #fef2f2; border: 1px solid #fecaca; color: #991b1b;
+    border-radius: 8px; padding: 12px 14px; font-size: 14px; line-height: 1.6; margin-top: 12px;
+  }
+  .validation-note { margin-top: 12px; font-size: 13px; color: var(--muted); line-height: 1.6; }
+  footer { margin-top: 32px; text-align: center; color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1><span class="logo">▚</span> pg-mcp 自然语言查询</h1>
+    <span id="status-pill" class="pill">检测中…</span>
+  </header>
+
+  <div id="banner" class="banner"></div>
+
+  <div class="card">
+    <div class="query-row">
+      <select id="database" title="目标数据库"></select>
+      <div class="question-wrap">
+        <textarea id="question" placeholder="用自然语言描述你要查询的内容，例如：最近 30 天注册了多少用户？"></textarea>
+        <div class="actions">
+          <button id="btn-run" class="primary">查询</button>
+          <button id="btn-sql" class="secondary">仅生成 SQL</button>
+          <div id="spinner" class="spinner"></div>
+        </div>
+        <div class="examples" id="examples"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="result"></div>
+
+  <footer>由 pg-mcp 驱动 · MCP 服务器同样支持 Claude Desktop 等客户端通过 stdio 调用</footer>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const state = { databases: [], busy: false };
+
+const EXAMPLES = [
+  "一共有多少用户？",
+  "最近 30 天注册了多少用户？",
+  "评论数最多的 5 篇文章是哪些？",
+  "每个分类下有多少篇文章？",
+  "消费金额最高的 10 个客户是谁？",
+];
+
+function renderDatabases(list) {
+  const sel = $("database");
+  sel.innerHTML = "";
+  const ok = list.filter((d) => d.status === "ok");
+  const all = list.map((d) => ({ ...d }));
+  state.databases = all;
+  if (ok.length === 1) {
+    sel.append(new Option(ok[0].name + "（默认）", ok[0].name));
+  } else if (ok.length > 1) {
+    sel.append(new Option("请选择数据库…", ""));
+    all.forEach((d) => {
+      if (d.status === "ok") sel.append(new Option(d.name, d.name));
+    });
+  } else {
+    sel.append(new Option("无可用数据库", ""));
+    sel.disabled = true;
+  }
+}
+
+async function refreshStatus() {
+  const pill = $("status-pill");
+  const banner = $("banner");
+  try {
+    const res = await fetch("/api/databases");
+    const info = await res.json();
+    renderDatabases(info.databases || []);
+    const problems = [];
+    if (info.config_error) problems.push(info.config_error);
+    (info.databases || []).forEach((d) => {
+      if (d.status !== "ok") problems.push(`数据库 <code>${d.name}</code> 不可用：${d.error}`);
+    });
+    if (!info.ready) {
+      pill.textContent = "未就绪";
+      pill.className = "pill bad";
+      banner.className = "banner error";
+      banner.innerHTML =
+        "<b>服务未完全就绪。</b>" +
+        (problems.length ? problems.map((p) => "<div>• " + p + "</div>").join("") : "") +
+        '<div style="margin-top:6px">配置方法：复制 <code>.env.example</code> 为 <code>.env</code>，设置 <code>OPENAI_API_KEY</code> 和 <code>DATABASE_*</code>（或 <code>DATABASES</code> JSON），然后重启服务。</div>';
+      banner.style.display = "block";
+    } else if (problems.length) {
+      pill.textContent = "部分可用";
+      pill.className = "pill";
+      banner.className = "banner";
+      banner.innerHTML = problems.map((p) => "<div>⚠ " + p + "</div>").join("");
+      banner.style.display = "block";
+    } else {
+      pill.textContent = "就绪";
+      pill.className = "pill ok";
+      banner.style.display = "none";
+    }
+  } catch (e) {
+    pill.textContent = "无法连接服务";
+    pill.className = "pill bad";
+  }
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+
+function renderResponse(resp) {
+  const box = $("result");
+  if (!resp || typeof resp !== "object") {
+    box.innerHTML = '<div class="card"><div class="error-box">服务返回了无法解析的响应。</div></div>';
+    return;
+  }
+  let html = '<div class="card">';
+  if (resp.success) {
+    const meta = [];
+    meta.push(`<span class="tag">置信度 <b>${resp.confidence ?? "-"}</b></span>`);
+    if (resp.tokens_used != null) meta.push(`<span class="tag">tokens <b>${resp.tokens_used}</b></span>`);
+    if (resp.data) {
+      meta.push(`<span class="tag">行数 <b>${resp.data.row_count}</b></span>`);
+      meta.push(`<span class="tag">执行耗时 <b>${(resp.data.execution_time_ms / 1000).toFixed(2)}s</b></span>`);
+    }
+    html += `<div class="meta">${meta.join("")}</div>`;
+
+    if (resp.generated_sql) {
+      html += `
+        <div class="sql-label"><span>生成的 SQL</span>
+          <button class="copy-btn" onclick="copySql(this)">复制</button>
+        </div>
+        <pre class="sql">${esc(resp.generated_sql)}</pre>`;
+    }
+    if (resp.data) {
+      const cols = resp.data.columns || [];
+      const rows = resp.data.rows || [];
+      if (!cols.length || !rows.length) {
+        html += '<div class="table-wrap"><p style="color:var(--muted)">查询成功，但没有返回数据。</p></div>';
+      } else {
+        html += '<div class="table-wrap"><table><thead><tr>' +
+          cols.map((c) => `<th>${esc(c)}</th>`).join("") + "</tr></thead><tbody>" +
+          rows.map((r) => "<tr>" + cols.map((c) => `<td>${esc(r[c] ?? "")}</td>`).join("") + "</tr>").join("") +
+          "</tbody></table></div>";
+      }
+    }
+    if (resp.validation && resp.validation.error_message) {
+      html += `<div class="validation-note">校验说明：${esc(resp.validation.error_message)}</div>`;
+    }
+  } else {
+    const err = resp.error || {};
+    html += `<div class="error-box"><b>查询失败</b>（${esc(err.code || "unknown")}）<br>${esc(err.message || "")}`;
+    if (err.details) html += `<br><small>${esc(JSON.stringify(err.details))}</small>`;
+    html += "</div>";
+  }
+  html += "</div>";
+  box.innerHTML = html;
+}
+
+function copySql(btn) {
+  const sql = btn.closest(".card").querySelector("pre.sql").innerText;
+  navigator.clipboard.writeText(sql).then(() => {
+    btn.textContent = "已复制";
+    setTimeout(() => (btn.textContent = "复制"), 1500);
+  });
+}
+
+function setBusy(busy) {
+  state.busy = busy;
+  $("btn-run").disabled = busy;
+  $("btn-sql").disabled = busy;
+  $("spinner").style.display = busy ? "block" : "none";
+}
+
+async function runQuery(returnType) {
+  if (state.busy) return;
+  const question = $("question").value.trim();
+  if (!question) {
+    $("question").focus();
+    return;
+  }
+  setBusy(true);
+  $("result").innerHTML = "";
+  try {
+    const res = await fetch("/api/query", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        question,
+        database: $("database").value || null,
+        return_type: returnType,
+      }),
+    });
+    renderResponse(await res.json());
+  } catch (e) {
+    renderResponse({ success: false, error: { code: "network_error", message: String(e) } });
+  } finally {
+    setBusy(false);
+  }
+}
+
+$("btn-run").addEventListener("click", () => runQuery("result"));
+$("btn-sql").addEventListener("click", () => runQuery("sql"));
+$("question").addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") runQuery("result");
+});
+$("examples").innerHTML = EXAMPLES.map(
+  (q) => `<span class="chip">${esc(q)}</span>`
+).join("");
+$("examples").addEventListener("click", (e) => {
+  if (e.target.classList.contains("chip")) {
+    $("question").value = e.target.textContent;
+    $("question").focus();
+  }
+});
+
+refreshStatus();
+</script>
+</body>
+</html>
